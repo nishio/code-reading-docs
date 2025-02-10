@@ -44,7 +44,7 @@ OCR済み書籍データへの適用は、非公開データ活用の具体的�
 
 ## 4. 他の有益な拡張可能性
 
-将来的にはDeep Researchを社内グループウェアに接続することで、以下のような価値が期待できます：
+Deep Researchを社内グループウェアに接続することで、以下のような価値が期待できます：
 
 1. **ナレッジマネジメントの強化**
    - 社内文書の横断的な分析と関連付け
@@ -114,3 +114,160 @@ async def write_final_report(prompt: str, learnings: List[str]):
 2. 各視点について情報を収集・抽出
 3. 収集した情報を分析し、追加調査の必要性を判断
 4. すべての情報を統合して最終レポートを作成
+
+## 7. OCR済み書籍データ対応の具体的な実装方針
+
+deep-research-pyをOCR済み書籍データに対応させるための具体的な実装方針を説明します。
+
+### 1. 新規モジュールの追加
+
+#### document_source.py
+OCR済み書籍データの管理と検索を担当する新しいモジュールを作成します：
+
+```python
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+import sqlite3
+from whoosh.fields import Schema, TEXT, ID
+from whoosh.qparser import QueryParser
+
+@dataclass
+class DocumentMetadata:
+    """OCR文書のメタデータ"""
+    id: str
+    title: str
+    author: Optional[str]
+    page_number: Optional[int]
+
+class LocalDocumentSource:
+    """Firecrawlの代替となるローカルデータソース"""
+    def __init__(self, index_dir: str, db_path: str):
+        self.index_dir = index_dir
+        self.db_path = db_path
+        self._init_storage()
+
+    async def search(self, query: str, limit: int = 5) -> Dict[str, List[Dict]]:
+        """ローカル文書の検索を実行"""
+        results = []
+        # Whooshを使用した全文検索の実装
+        return {"data": results}
+
+    async def extract(self, doc_id: str) -> str:
+        """文書の内容を抽出"""
+        # SQLiteからメタデータと本文を取得
+        return content
+```
+
+### 2. 既存モジュールの修正
+
+#### deep_research.py
+メインクラスを修正してローカルデータソースに対応させます：
+
+```python
+class DeepResearch:
+    """Deep Research core class"""
+    def __init__(self, source=None):
+        # デフォルトはFirecrawl、ローカルソースも指定可能
+        self.source = source or Firecrawl(
+            api_key=os.environ.get("FIRECRAWL_KEY", ""),
+            api_url=os.environ.get("FIRECRAWL_BASE_URL"),
+        )
+
+    async def search(self, query: str) -> SearchResponse:
+        """検索を実行（ローカルソースとFirecrawl両対応）"""
+        return await self.source.search(query)
+```
+
+#### prompt.py
+OCR文書特有のプロンプトを追加します：
+
+```python
+def ocr_system_prompt() -> str:
+    """OCR文書用のシステムプロンプト"""
+    return """OCR処理された書籍の内容を分析しています。
+    以下の点に注意してください：
+    - OCRエラーの可能性
+    - ページ番号や文書構造
+    - 引用や参考文献
+    - 誤認識されやすい専門用語
+    """
+```
+
+### 3. CLIの拡張
+
+#### run.py
+コマンドラインインターフェースを拡張します：
+
+```python
+@app.command()
+def research(
+    query: str = typer.Argument(..., help="検索クエリ"),
+    source: str = typer.Option("web", help="データソース（web/local）"),
+    index_dir: str = typer.Option(
+        "~/.deep_research/index",
+        help="インデックスディレクトリ"
+    ),
+):
+    """実行時にデータソースを選択可能に"""
+    if source == "local":
+        source = LocalDocumentSource(index_dir)
+    else:
+        source = None  # デフォルトのFirecrawlを使用
+```
+
+### 4. 必要な依存関係の追加
+
+pyproject.tomlに以下の依存関係を追加します：
+
+```toml
+[tool.poetry.dependencies]
+whoosh = "^2.7.4"  # 全文検索エンジン
+sqlite-utils = "^3.35"  # SQLite操作
+python-magic = "^0.4.27"  # ファイルタイプ検出
+```
+
+### 5. データ準備ツールの追加
+
+#### tools/index_documents.py
+OCR文書のインデックス作成ツールを実装します：
+
+```python
+@app.command()
+def index_documents(
+    input_dir: str = typer.Argument(..., help="OCRファイルのディレクトリ"),
+    format: str = typer.Option("txt", help="入力形式（txt/pdf/json）"),
+):
+    """OCR済み文書のインデックスを作成"""
+    store = LocalDocumentSource(index_dir="~/.deep_research/index")
+    
+    # 文書をスキャン
+    for file_path in Path(input_dir).glob(f"*.{format}"):
+        # メタデータの抽出
+        metadata = extract_metadata(file_path)
+        # 内容の読み込みと前処理
+        content = preprocess_ocr_content(file_path)
+        # インデックスに追加
+        store.add_document(metadata, content)
+```
+
+### 6. 実装時の注意点
+
+1. **OCRテキストの前処理**
+   - 文字化けの修正
+   - 改行の正規化
+   - ノイズの除去
+
+2. **検索の最適化**
+   - Whooshインデックスの適切な設計
+   - メタデータの効率的な管理
+   - キャッシュ戦略の実装
+
+3. **エラー処理**
+   - OCRエラーの検出と報告
+   - 破損ファイルのスキップ
+   - インデックス更新の整合性確保
+
+4. **パフォーマンス考慮**
+   - 大規模文書への対応
+   - メモリ使用量の最適化
+   - 検索速度の向上
