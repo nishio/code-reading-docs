@@ -33,3 +33,4 @@
 - [OSSのDeep Research実装の分析レポート](deep-research.md)
 - [Devikaの実行フロー解説](devika-flow.md)
 - [Devikaエージェントの LLM 通信フロー](devika-agent-llm-interaction.md)
+- [idobata-analyst システム解説](idobata-analyst.md)
