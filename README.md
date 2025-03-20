@@ -34,3 +34,4 @@
 - [Devikaの実行フロー解説](devika-flow.md)
 - [Devikaエージェントの LLM 通信フロー](devika-agent-llm-interaction.md)
 - [idobata-analyst システム解説](idobata-analyst.md)
+- [idobata-analyst システム解説（改訂版）](idobata-analyst-v2.md)
